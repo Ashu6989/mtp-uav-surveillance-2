@@ -61,6 +61,7 @@ def train_mappo(env, actor, critic, total_timesteps=10000,
     num_steps = 200 # env.max_steps
     
     N = env.N
+    N_actual = getattr(env, 'N_actual', N)
     obs_dim = env.obs_dim
     
     # Buffers
@@ -106,9 +107,9 @@ def train_mappo(env, actor, critic, total_timesteps=10000,
             
             obs = next_obs
             step += 1
-            global_step += N
+            global_step += N_actual
             
-            if np.all(dones):
+            if np.all(dones[:N_actual]):
                 break
                 
         # Calculate next value
@@ -121,11 +122,15 @@ def train_mappo(env, actor, critic, total_timesteps=10000,
         advantages = torch.zeros((step, N), dtype=torch.float32)
         returns = torch.zeros((step, N), dtype=torch.float32)
         
-        # We also need an active mask. Once done becomes True, that step is the last active step.
-        # Steps AFTER done becomes True are masked out.
+        # We need an active mask:
+        # 1. Mask out dummy agents completely (i >= N_actual)
+        # 2. For actual agents (i < N_actual), once done becomes True, that step is the last active step.
+        #    Steps AFTER done becomes True are masked out.
         active_mask = torch.ones((step, N), dtype=torch.bool)
-        
-        for i in range(N):
+        if N_actual < N:
+            active_mask[:, N_actual:] = False
+            
+        for i in range(N_actual):
             agent_rewards = rewards_buf[:step, i].numpy()
             agent_dones = dones_buf[:step, i].numpy()
             agent_values = torch.cat([values_buf[:step, i], next_values[i:i+1]]).numpy()
@@ -155,6 +160,9 @@ def train_mappo(env, actor, critic, total_timesteps=10000,
         global_obs_matrix = global_obs_buf[:step].unsqueeze(1).expand(step, N, N * obs_dim)
         flat_global_obs = global_obs_matrix[active_mask]
         
+        if len(flat_obs) == 0:
+            continue
+            
         # Normalize advantages
         if len(flat_advantages) > 1:
             flat_advantages = (flat_advantages - flat_advantages.mean()) / (flat_advantages.std() + 1e-8)

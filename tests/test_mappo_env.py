@@ -24,10 +24,16 @@ def test_single_uav_standard(test_warehouse):
     reference_paths = [[(1, 7.5, 1), (3, 7.5, 1)]]
     env = MAPPOEnv(test_warehouse, reference_paths)
     
-    # Check observation dimension
-    assert env.obs_dim == 24, f"Expected obs_dim 24, got {env.obs_dim}"
+    # Check observation dimension (3 + 3 + 3*3 + 3*(5-1) + 3 = 30)
+    assert env.obs_dim == 30, f"Expected obs_dim 30, got {env.obs_dim}"
     
     obs = env.reset()
+    assert obs.shape == (5, 30)
+    assert env.dones[0] == False
+    assert np.all(env.dones[1:] == True)
+    
+    # Neighbor slots for UAV 0 (start at 3 + 3 + 3*3 = 15, length 3*(5-1) = 12) should be 1000.0
+    np.testing.assert_allclose(obs[0, 15:27], np.full(12, 1000.0))
     
     actions = [[0.5, 0.0, 0.0]]
     obs, rewards, dones = env.step(actions)
@@ -35,6 +41,8 @@ def test_single_uav_standard(test_warehouse):
     np.testing.assert_allclose(env.velocities[0], [0.5, 0.0, 0.0])
     np.testing.assert_allclose(env.positions[0], [1.25, 7.5, 1.0])
     np.testing.assert_allclose(rewards[0], -1.7625)
+    assert dones[0] == False
+    assert np.all(dones[1:] == True)
 
 def test_single_uav_clipping(test_warehouse):
     reference_paths = [[(1, 7.5, 1), (3, 7.5, 1)]]

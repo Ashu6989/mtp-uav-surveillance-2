@@ -150,4 +150,49 @@ def test_masking_perturbation():
     p_loss3, v_loss3 = get_loss(rewards_buf3, values_buf, actions_buf)
     
     assert torch.abs(p_loss1 - p_loss3) > 1e-6
+
+def test_centralized_critic_default_and_dummy_masking():
+    # Test CentralizedCritic default bounds
+    obs_dim = 30
+    critic = CentralizedCritic(obs_dim)
+    assert critic.N == 5
+    assert critic.net[0].in_features == 5 * 30 + 5 # 155
+    
+    # Test active_mask logic with N_actual < N_max
+    step = 5
+    N_max = 5
+    N_actual = 2
+    
+    dones = np.zeros((step, N_max), dtype=bool)
+    # Dummy agents done always
+    dones[:, N_actual:] = True
+    # Agent 0 finishes at step 2
+    dones[2, 0] = True
+    # Agent 1 never finishes within the 5 steps
+    
+    active_mask = torch.ones((step, N_max), dtype=torch.bool)
+    if N_actual < N_max:
+        active_mask[:, N_actual:] = False
+        
+    for i in range(N_actual):
+        agent_dones = dones[:step, i]
+        done_idx = np.where(agent_dones)[0]
+        if len(done_idx) > 0:
+            first_done = done_idx[0]
+            if first_done + 1 < step:
+                active_mask[first_done + 1:, i] = False
+                
+    # Agent 0: step 0, 1, 2 should be active; step 3, 4 should be masked
+    assert active_mask[0, 0] == True
+    assert active_mask[1, 0] == True
+    assert active_mask[2, 0] == True
+    assert active_mask[3, 0] == False
+    assert active_mask[4, 0] == False
+    
+    # Agent 1: all 5 steps should be active
+    assert torch.all(active_mask[:, 1] == True)
+    
+    # Dummy agents 2, 3, 4: all steps must be masked out
+    assert torch.all(active_mask[:, 2:] == False)
+
     

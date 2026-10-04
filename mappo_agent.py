@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 
+N_MAX = 5
+G_MAX = 500
+P_MAX = 300
+
 class SharedActor(nn.Module):
     def __init__(self, obs_dim, action_dim, hidden_sizes=(64, 64)):
         super().__init__()
@@ -34,7 +38,7 @@ class SharedActor(nn.Module):
         return action, logprob
 
 class CentralizedCritic(nn.Module):
-    def __init__(self, obs_dim, N, hidden_sizes=(64, 64)):
+    def __init__(self, obs_dim, N=N_MAX, hidden_sizes=(64, 64)):
         super().__init__()
         self.N = N
         self.obs_dim = obs_dim
